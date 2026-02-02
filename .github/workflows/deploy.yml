@@ -1,0 +1,48 @@
+name: Build & Deploy to GKE
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: asia-east1
+  IMAGE_NAME: ml-api
+  CLUSTER_NAME: ml-gke-cluster
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker asia-east1-docker.pkg.dev --quiet
+
+      - name: Build & Push Image (linux/amd64)
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t asia-east1-docker.pkg.dev/$PROJECT_ID/ml-repo/$IMAGE_NAME:${{ github.sha }} \
+            -t asia-east1-docker.pkg.dev/$PROJECT_ID/ml-repo/$IMAGE_NAME:latest \
+            --push .
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION
+
+      - name: Deploy to GKE
+        run: |
+          kubectl apply -f deployment.yaml
+          kubectl rollout status deployment/ml-api

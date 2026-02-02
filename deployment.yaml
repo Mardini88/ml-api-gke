@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-api
+  labels:
+    app: ml-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ml-api
+  template:
+    metadata:
+      labels:
+        app: ml-api
+    spec:
+      containers:
+        - name: ml-api
+          image: ml-api:local
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 8000
+
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+
+          # -----------------------------
+          # Health Checks
+          # -----------------------------
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5

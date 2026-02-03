@@ -2,55 +2,58 @@ name: Build & Deploy to GKE
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: asia-east1
-  IMAGE_NAME: ml-api
   CLUSTER_NAME: ml-gke-cluster
-  REPO: ml-repo
+  IMAGE_NAME: ml-api
+  REPO_NAME: ml-repo
 
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-      id-token: write
-
     steps:
+      # 1️⃣ Checkout code
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2️⃣ Authenticate to GCP using Service Account JSON
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      # 3️⃣ Install gcloud SDK
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
+      # 4️⃣ Configure Docker to use Artifact Registry
       - name: Configure Docker for Artifact Registry
         run: |
           gcloud auth configure-docker asia-east1-docker.pkg.dev --quiet
 
-      - name: Build & Push Image
+      # 5️⃣ Build & Push Docker image
+      - name: Build & Push Docker image
         run: |
           docker build \
-            -t asia-east1-docker.pkg.dev/$PROJECT_ID/$REPO/$IMAGE_NAME:${{ github.sha }} \
-            -t asia-east1-docker.pkg.dev/$PROJECT_ID/$REPO/$IMAGE_NAME:latest .
-          docker push asia-east1-docker.pkg.dev/$PROJECT_ID/$REPO/$IMAGE_NAME:${{ github.sha }}
-          docker push asia-east1-docker.pkg.dev/$PROJECT_ID/$REPO/$IMAGE_NAME:latest
+            -t asia-east1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:latest .
+          docker push \
+            asia-east1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:latest
 
-      # 
-      - name: Get GKE credentials (official action)
+      # 🔥 6️⃣ Get GKE credentials (NO gcloud get-credentials)
+      - name: Get GKE credentials
         uses: google-github-actions/get-gke-credentials@v2
         with:
           cluster_name: ${{ env.CLUSTER_NAME }}
           location: ${{ env.REGION }}
-          project_id: ${{ env.PROJECT_ID }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
+      # 7️⃣ Deploy to GKE
       - name: Deploy to GKE
         run: |
           kubectl apply -f deployment.yaml
